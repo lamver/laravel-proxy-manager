@@ -8,47 +8,45 @@ use Exception;
 
 class ProxyCheckerService
 {
-    /**
-     * Список надежных URL для проверки прокси
-     */
-    protected array $targets = [
-        'https://google.com',
-        'https://1.1.1.1',
-        'https://httpbin.org'
+    protected array $ipCheckers = [
+        'https://ipify.org',
+        'https://ipinfo.io',
+        'https://ifconfig.me'
     ];
 
-    /**
-     * Проверить работоспособность прокси-сервера
-     */
     public function check(Proxy $proxy): string
     {
-        $proxyUrl = "{$proxy->type}://{$proxy->ip}:{$proxy->port}";
-        $status = 'dead';
+       $status = 'dead';
 
-        try {
-            $request = Http::timeout(5)->connectTimeout(3);
-
-            if ($proxy->username && $proxy->password) {
-                $request->withOptions([
-                    'proxy' => [
-                        $proxy->type => "{$proxy->type}://{$proxy->username}:{$proxy->password}@{$proxy->ip}:{$proxy->port}"
-                    ]
-                ]);
-            } else {
-                $request->withOptions(['proxy' => $proxyUrl]);
-            }
-
-            foreach ($this->targets as $target) {
-                $response = $request->get($target);
-                if ($response->successful()) {
-                    $status = 'active';
-                    break;
-                }
-            }
-        } catch (Exception $e) {
-            $status = 'dead';
+        if ($proxy->username && $proxy->password) {
+            $proxyString = "{$proxy->type}://{$proxy->username}:{$proxy->password}@{$proxy->ip}:{$proxy->port}";
+        } else {
+            $proxyString = "{$proxy->type}://{$proxy->ip}:{$proxy->port}";
         }
-        
+
+        foreach ($this->ipCheckers as $url) {
+            try {
+                $response = Http::timeout(4)
+                    ->connectTimeout(2)
+                    ->withOptions([
+                        'proxy' => $proxyString,
+                        'verify' => false,
+                    ])
+                    ->get($url);
+
+                if ($response->successful()) {
+                    $body = $response->text();
+
+                    if (str_contains($body, $proxy->ip)) {
+                        $status = 'active';
+                        break;
+                    }
+                }
+            } catch (Exception $e) {
+                continue;
+            }
+        }
+
         $proxy->update([
             'status' => $status,
             'last_checked_at' => now(),

@@ -3,8 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\Proxy;
+use App\Jobs\CheckProxyJob;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Bus;
 use Tests\TestCase;
 
 /**
@@ -12,19 +13,16 @@ use Tests\TestCase;
  */
 class ProxyApiTest extends TestCase
 {
-    // Очищает базу данных тестового окружения перед каждым запуском теста
     use RefreshDatabase;
 
     /**
-     * test test_can_create_and_automatically_activate_working_proxy function
+     * test_can_create_proxy_and_dispatches_job function
      *
      * @return void
      */
-    public function test_can_create_and_automatically_activate_working_proxy(): void
+    public function test_can_create_proxy_and_dispatches_job(): void
     {
-        Http::fake([
-            'https://ipify.org*' => Http::response(['ip' => '185.22.44.11'], 200),
-        ]);
+        Bus::fake();
 
         $payload = [
             'ip' => '185.22.44.11',
@@ -38,42 +36,13 @@ class ProxyApiTest extends TestCase
 
         $response->assertStatus(201);
 
-        $response->assertJsonFragment(['status' => 'active']);
-
         $this->assertDatabaseHas('proxies', [
             'ip' => '185.22.44.11',
             'port' => 8080,
-            'status' => 'active'
-        ]);
-    }
-
-    /**
-     * test_proxy_marked_as_dead_if_checker_service_fails function
-     *
-     * @return void
-     */
-    public function test_proxy_marked_as_dead_if_checker_service_fails(): void
-    {
-        Http::fake([
-            '*' => Http::response('Service Unavailable', 503),
+            'status' => 'unchecked'
         ]);
 
-        $payload = [
-            'ip' => '192.168.1.99',
-            'port' => 3128,
-            'type' => 'socks5'
-        ];
-
-        $response = $this->postJson('/api/proxies', $payload);
-
-        $response->assertStatus(201);
-        $response->assertJsonFragment(['status' => 'dead']);
-
-        $this->assertDatabaseHas('proxies', [
-            'ip' => '192.168.1.99',
-            'port' => 3128,
-            'status' => 'dead'
-        ]);
+        Bus::assertDispatched(CheckProxyJob::class);
     }
 
     /**

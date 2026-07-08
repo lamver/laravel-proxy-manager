@@ -5,69 +5,94 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Proxy;
 use App\Services\ProxyCheckerService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
+
+/**
+ * ProxyController class
+ */
 class ProxyController extends Controller
 {
     protected ProxyCheckerService $proxyChecker;
 
+    /**
+     * ProxyController __construct function
+     *
+     * @param ProxyCheckerService $proxyChecker
+     */
     public function __construct(ProxyCheckerService $proxyChecker)
     {
         $this->proxyChecker = $proxyChecker;
     }
 
-    public function index()
+    /**
+     * index function
+     *
+     * @return JsonResponse
+     */
+    public function index(): JsonResponse
     {
         return response()->json(Proxy::orderBy('id', 'desc')->get());
     }
 
-    public function store(Request $request)
+    /**
+     * store function
+     *
+     * @param Request $request
+     * @return void
+     */
+    public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-        'ip' => [
-            'required',
-            'ip',
-            // Проверяем уникальность пары IP + Порт
-            Rule::unique('proxies')->where(function ($query) use ($request) {
-                return $query->where('port', $request->port);
-            }),
-        ],
-        'port' => 'required|integer|between:1,65535',
-        'type' => 'required|in:http,https,socks4,socks5',
-        'username' => 'nullable|string|max:255',
-        'password' => 'nullable|string|max:255',
+            'ip' => [
+                'required',
+                'ip',
+                // Проверяем уникальность пары IP + Порт
+                Rule::unique('proxies')->where(function ($query) use ($request) {
+                    return $query->where('port', $request->port);
+                }),
+            ],
+            'port' => 'required|integer|between:1,65535',
+            'type' => 'required|in:http,https,socks4,socks5',
+            'username' => 'nullable|string|max:255',
+            'password' => 'nullable|string|max:255',
         ], [
             // Кастомное сообщение об ошибке для фронтенда
             'ip.unique' => 'This proxy server (IP and Port) has already been added to the list.',
         ]);
 
         $proxy = Proxy::create($validated);
-        
         $this->proxyChecker->check($proxy);
 
         return response()->json($proxy, 201);
     }
 
-    public function update(Request $request, Proxy $proxy)
+    /**
+     * update function
+     *
+     * @param Request $request
+     * @param Proxy $proxy
+     * @return JsonResponse
+     */
+    public function update(Request $request, Proxy $proxy): JsonResponse
     {
         $validated = $request->validate([
-        'ip' => [
-            'required',
-            'ip',
-            // Проверяем уникальность пары при обновлении, игнорируя текущую запись
-            Rule::unique('proxies')->ignore($proxy->id)->where(function ($query) use ($request) {
-                return $query->where('port', $request->port);
-            }),
-        ],
-        'port' => 'required|integer|between:1,65535',
-        'type' => 'required|in:http,https,socks4,socks5',
-        'username' => 'nullable|string|max:255',
-        'password' => 'nullable|string|max:255',
+            'ip' => [
+                'required',
+                'ip',
+                Rule::unique('proxies')->ignore($proxy->id)->where(function ($query) use ($request) {
+                    return $query->where('port', $request->port);
+                }),
+            ],
+            'port' => 'required|integer|between:1,65535',
+            'type' => 'required|in:http,https,socks4,socks5',
+            'username' => 'nullable|string|max:255',
+            'password' => 'nullable|string|max:255',
         ], [
             'ip.unique' => 'Another proxy server with the same IP and Port already exists.',
         ]);
-
 
         $proxy->update($validated);
         $this->proxyChecker->check($proxy);
@@ -75,13 +100,19 @@ class ProxyController extends Controller
         return response()->json($proxy);
     }
 
-    public function destroy(Proxy $proxy)
+    /**
+     * destroy function
+     *
+     * @param Proxy $proxy
+     * @return JsonResponse
+     */
+    public function destroy(Proxy $proxy): JsonResponse
     {
         $proxy->delete();
         return response()->json(null, 204);
     }
 
-    public function check(Proxy $proxy)
+    public function check(Proxy $proxy): JsonResponse
     {
         $this->proxyChecker->check($proxy);
         return response()->json($proxy);

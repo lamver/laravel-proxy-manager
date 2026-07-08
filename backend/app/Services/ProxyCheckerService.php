@@ -3,9 +3,13 @@
 namespace App\Services;
 
 use App\Models\Proxy;
-use Illuminate\Support\Facades\Http;
 use Exception;
+use Illuminate\Support\Facades\Http;
 
+
+/**
+ * ProxyCheckerService class
+ */
 class ProxyCheckerService
 {
     protected array $ipCheckers = [
@@ -14,9 +18,15 @@ class ProxyCheckerService
         'https://ifconfig.me'
     ];
 
+    /**
+     * check proxy function
+     *
+     * @param Proxy $proxy
+     * @return string
+     */
     public function check(Proxy $proxy): string
     {
-       $status = 'dead';
+        $status = 'dead';
 
         if ($proxy->username && $proxy->password) {
             $proxyString = "{$proxy->type}://{$proxy->username}:{$proxy->password}@{$proxy->ip}:{$proxy->port}";
@@ -35,11 +45,11 @@ class ProxyCheckerService
                     ->get($url);
 
                 if ($response->successful()) {
-                    $body = $response->body(); 
+                    $body = $response->body();
 
                     if (str_contains($body, $proxy->ip)) {
                         $status = 'active';
-                        break; 
+                        break;
                     }
                 }
             } catch (Exception $e) {

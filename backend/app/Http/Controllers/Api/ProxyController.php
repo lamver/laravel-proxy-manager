@@ -25,21 +25,21 @@ class ProxyController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'ip' => 'required|ip',
-            'port' => 'required|integer|between:1,65535',
-            'type' => 'required|in:http,https,socks4,socks5',
-            'username' => 'nullable|string|max:255',
-            'password' => 'nullable|string|max:255',
-            'ip_port' => [
-                function ($attribute, $value, $fail) use ($request) {
-                    $exists = Proxy::where('ip', $request->ip)
-                        ->where('port', $request->port)
-                        ->exists();
-                    if ($exists) {
-                        $fail('Этот прокси-сервер (IP и Порт) уже добавлен в список.');
-                    }
-                }
-            ]
+        'ip' => [
+            'required',
+            'ip',
+            // Проверяем уникальность пары IP + Порт
+            Rule::unique('proxies')->where(function ($query) use ($request) {
+                return $query->where('port', $request->port);
+            }),
+        ],
+        'port' => 'required|integer|between:1,65535',
+        'type' => 'required|in:http,https,socks4,socks5',
+        'username' => 'nullable|string|max:255',
+        'password' => 'nullable|string|max:255',
+        ], [
+            // Кастомное сообщение об ошибке для фронтенда
+            'ip.unique' => 'This proxy server (IP and Port) has already been added to the list.',
         ]);
 
         $proxy = Proxy::create($validated);
@@ -52,24 +52,22 @@ class ProxyController extends Controller
     public function update(Request $request, Proxy $proxy)
     {
         $validated = $request->validate([
-            'ip' => 'required|ip',
-            'port' => 'required|integer|between:1,65535',
-            'type' => 'required|in:http,https,socks4,socks5',
-            'username' => 'nullable|string|max:255',
-            'password' => 'nullable|string|max:255',
-            // Проверка уникальности при изменении, исключая текущую запись
-            'ip_port' => [
-                function ($attribute, $value, $fail) use ($request, $proxy) {
-                    $exists = Proxy::where('ip', $request->ip)
-                        ->where('port', $request->port)
-                        ->where('id', '!=', $proxy->id)
-                        ->exists();
-                    if ($exists) {
-                        $fail('Другой прокси-сервер с такими IP и Портом уже существует.');
-                    }
-                }
-            ]
+        'ip' => [
+            'required',
+            'ip',
+            // Проверяем уникальность пары при обновлении, игнорируя текущую запись
+            Rule::unique('proxies')->ignore($proxy->id)->where(function ($query) use ($request) {
+                return $query->where('port', $request->port);
+            }),
+        ],
+        'port' => 'required|integer|between:1,65535',
+        'type' => 'required|in:http,https,socks4,socks5',
+        'username' => 'nullable|string|max:255',
+        'password' => 'nullable|string|max:255',
+        ], [
+            'ip.unique' => 'Another proxy server with the same IP and Port already exists.',
         ]);
+
 
         $proxy->update($validated);
         $this->proxyChecker->check($proxy);

@@ -35,11 +35,11 @@ class ProxyCheckerService
                     ->get($url);
 
                 if ($response->successful()) {
-                    $body = $response->text();
+                    $body = $response->body(); 
 
                     if (str_contains($body, $proxy->ip)) {
                         $status = 'active';
-                        break;
+                        break; 
                     }
                 }
             } catch (Exception $e) {

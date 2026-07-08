@@ -851,7 +851,6 @@ button {
     border-color: #1d4ed8;
 }
 
-/* Оформление блока многоточия */
 .page-dots {
     padding: 0 0.4rem;
     color: #94a3b8;
@@ -868,7 +867,7 @@ button {
     padding: 0.8rem 1.2rem;
     border-radius: 6px;
     margin-bottom: 1.5rem;
-    flex-wrap: wrap; /* Позволяет переносить элементы на Mac/мобильных, если экран узкий */
+    flex-wrap: wrap; 
 }
 .filter-group {
     display: flex;

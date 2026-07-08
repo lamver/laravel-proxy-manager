@@ -34,9 +34,31 @@ class ProxyController extends Controller
      *
      * @return JsonResponse
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return response()->json(Proxy::orderBy('id', 'desc')->get());
+        $query = Proxy::query();
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+
+        if ($request->filled('search')) {
+            $query->where('ip', 'like', '%' . $request->search . '%');
+        }
+
+        $perPage = (int) $request->input('per_page', 15);
+
+        if ($perPage < 1 || $perPage > 100) {
+            $perPage = 15;
+        }
+
+        $proxies = $query->orderBy('id', 'desc')->paginate($perPage);
+
+        return response()->json($proxies);
     }
 
     /**

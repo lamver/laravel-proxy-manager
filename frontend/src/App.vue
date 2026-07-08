@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 
 const isFormVisible = ref(false)
 const proxies = ref([])
@@ -8,22 +8,84 @@ const errorMessage = ref('')
 const validationErrors = ref({})
 const form = ref({ id: null, ip: '', port: 8080, type: 'http', username: '', password: '' })
 const isEditing = ref(false)
+const currentFilters = ref({ status: '', type: '', search: '' })
+const pagination = ref({ current_page: 1, last_page: 1, total: 0 })
+const perPage = ref(15)
 
 const openCreateForm = () => {
     resetForm()
     isFormVisible.value = true
 }
 
-const fetchProxies = async () => {
+const visiblePages = computed(() => {
+    const current = pagination.value.current_page
+    const last = pagination.value.last_page
+    const delta = 5
+    
+    const pages = []
+
+    for (let i = 1; i <= last; i++) {
+        if (i === 1 || i === last || (i >= current - delta && i <= current + delta)) {
+            pages.push(i)
+        }
+    }
+
+    const result = []
+    let l
+
+    for (let i of pages) {
+        if (l) {
+            if (i - l === 2) {
+                result.push(l + 1)
+            } else if (i - l > 2) {
+                result.push('...')
+            }
+        }
+        result.push(i)
+        l = i
+    }
+
+    return result
+})
+
+const fetchProxies = async (page = 1) => {
+    const targetPage = page && !isNaN(page) ? page : 1;
+
     try {
-        const res = await fetch('/api/proxies')
-        if (!res.ok) throw new Error('Server error while retrieving list')
-        proxies.value = await res.json()
+        const params = new URLSearchParams({
+            page: targetPage,
+            status: currentFilters.value.status,
+            type: currentFilters.value.type,
+            search: currentFilters.value.search,
+            per_page: perPage.value 
+        })
+
+        const res = await fetch(`/api/proxies?${params.toString()}`)
+        if (!res.ok) throw new Error('Ошибка сервера')
+        
+        const result = await res.json()
+        
+        if (result && Array.isArray(result.data)) {
+            proxies.value = result.data
+            pagination.value = {
+                current_page: result.current_page || 1,
+                last_page: result.last_page || 1,
+                total: result.total || 0
+            }
+        }
         errorMessage.value = ''
     } catch (err) { 
-        console.error('Loading error:', err) 
-        errorMessage.value = 'Failed to load proxy list.'
+        console.error('Error in fetchProxies:', err) 
+        errorMessage.value = 'Error load proxy list data.'
     }
+}
+
+const handlePerPageChange = () => {
+    fetchProxies(1)
+}
+
+const applyFilters = () => {
+    fetchProxies(1)
 }
 
 const handleSubmit = async () => {
@@ -144,8 +206,8 @@ const formatTime = (dateString) => {
 
 let interval = null
 onMounted(() => {
-    fetchProxies()
-    interval = setInterval(fetchProxies, 15000)
+    fetchProxies(1)
+    interval = setInterval(fetchProxies(pagination.value.current_page), 15000)
 })
 onBeforeUnmount(() => clearInterval(interval))
 </script>
@@ -165,7 +227,7 @@ onBeforeUnmount(() => clearInterval(interval))
                 <div class="file-input-wrapper">
                     <input type="file" accept=".txt" @change="handleFileUpload" :disabled="isLoading" id="proxy-file" />
                     <label for="proxy-file" class="btn-file-label">
-                        {{ isLoading ? 'Processing...' : 'Выбрать .txt файл с прокси' }}
+                        {{ isLoading ? 'Processing...' : 'Upload .txt file proxy list' }}
                     </label>
                 </div>
             </div>
@@ -231,13 +293,56 @@ onBeforeUnmount(() => clearInterval(interval))
             </div>
         </form>
         
+        <div class="filters-bar">
+            <div class="filter-group">
+                <label>Search by IP:</label>
+                <input v-model="currentFilters.search" @input="applyFilters" type="text" placeholder="Введите IP..." class="search-input" />
+            </div>
+
+            <div class="filter-group">
+                <label>Status:</label>
+                <select v-model="currentFilters.status" @change="applyFilters">
+                    <option value="">All</option>
+                    <option value="active">🟢 Active</option>
+                    <option value="dead">🔴 Dead</option>
+                    <option value="unchecked">🟡 Unchecked...</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Protocol:</label>
+                <select v-model="currentFilters.type" @change="applyFilters">
+                    <option value="">All</option>
+                    <option value="http">HTTP</option>
+                    <option value="https">HTTPS</option>
+                    <option value="socks4">SOCKS4</option>
+                    <option value="socks5">SOCKS5</option>
+                </select>
+            </div>
+
+            <div class="filter-group per-page-group">
+                <label>Per page:</label>
+                <select v-model="perPage" @change="handlePerPageChange">
+                    <option :value="5">5 </option>
+                    <option :value="15">15 </option>
+                    <option :value="30">30 </option>
+                    <option :value="50">50 </option>
+                    <option :value="100">100 </option>
+                </select>
+            </div>
+
+            <div class="total-count">
+                Total: <strong>{{ pagination.total }}</strong>
+            </div>
+        </div>
+
         <!-- TABLE PROXIES -->
         <div class="table-responsive">
             <table class="proxy-table">
                 <thead>
                     <tr>
                         <th>Protocol</th>
-                        <th>Address (IP:Prot)</th>
+                        <th>Address (IP:Port)</th>
                         <th>Auth</th>
                         <th>Status</th>
                         <th>Last check</th>
@@ -271,6 +376,41 @@ onBeforeUnmount(() => clearInterval(interval))
                     </tr>
                 </tbody>
             </table>
+            <div v-if="pagination.last_page > 1" class="pagination-container">
+  
+                <button 
+                    type="button"
+                    :disabled="pagination.current_page === 1" 
+                    @click.prevent="fetchProxies(pagination.current_page - 1)"
+                    class="btn-page btn-arrow"
+                >
+                    « Back
+                </button>
+                
+                <div class="page-numbers">
+                    <template v-for="(page, idx) in visiblePages" :key="idx">
+                        <span v-if="page === '...'" class="page-dots">...</span>
+                        
+                        <button 
+                            v-else
+                            type="button"
+                            @click.prevent="fetchProxies(page)"
+                            :class="['btn-page', 'btn-number', { 'active-page': page === pagination.current_page }]"
+                        >
+                            {{ page }}
+                        </button>
+                    </template>
+                </div>
+
+                <button 
+                    type="button"
+                    :disabled="pagination.current_page === pagination.last_page" 
+                    @click.prevent="fetchProxies(pagination.current_page + 1)"
+                    class="btn-page btn-arrow"
+                >
+                    Next »
+                </button>
+            </div>
         </div>
     </main>
 </template>
@@ -655,5 +795,106 @@ button {
 }
 .btn-file-label:hover {
     background: #0369a1;
+}
+
+.pagination-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 2rem;
+    padding: 0.5rem;
+    user-select: none;
+}
+
+.page-numbers {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.btn-page {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    padding: 0.45rem 0.85rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-page:hover:not(:disabled) {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+    color: #0f172a;
+}
+
+.btn-page:disabled {
+    color: #cbd5e1;
+    cursor: not-allowed;
+    background: #f8fafc;
+    border-color: #e2e8f0;
+}
+
+/* Специфичный стиль для активной страницы */
+.btn-number.active-page {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.btn-number.active-page:hover {
+    background: #1d4ed8;
+    border-color: #1d4ed8;
+}
+
+/* Оформление блока многоточия */
+.page-dots {
+    padding: 0 0.4rem;
+    color: #94a3b8;
+    font-weight: 600;
+    letter-spacing: 0.1rem;
+}
+
+.filters-bar {
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 0.8rem 1.2rem;
+    border-radius: 6px;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap; /* Позволяет переносить элементы на Mac/мобильных, если экран узкий */
+}
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.filter-group label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #475569;
+    white-space: nowrap;
+}
+.filter-group select, .search-input {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    outline: none;
+    background: #fff;
+}
+.search-input {
+    width: 140px;
+}
+.total-count {
+    margin-left: auto;
+    font-size: 0.9rem;
+    color: #64748b;
 }
 </style>

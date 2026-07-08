@@ -12,12 +12,6 @@ use Illuminate\Support\Facades\Http;
  */
 class ProxyCheckerService
 {
-    protected array $ipCheckers = [
-        'https://ipify.org',
-        'https://ipinfo.io',
-        'https://ifconfig.me'
-    ];
-
     /**
      * check proxy function
      *
@@ -28,35 +22,59 @@ class ProxyCheckerService
     {
         $status = 'dead';
 
-        if ($proxy->username && $proxy->password) {
-            $proxyString = "{$proxy->type}://{$proxy->username}:{$proxy->password}@{$proxy->ip}:{$proxy->port}";
-        } else {
-            $proxyString = "{$proxy->type}://{$proxy->ip}:{$proxy->port}";
-        }
+        // 1. Получаем строку из .env и разбиваем её по запятой в массив
+        $envTargets = env('PROXY_CHECK_TARGETS', 'https://datahunter.store');
+        $targets = array_map('trim', explode(',', $envTargets));
 
-        foreach ($this->ipCheckers as $url) {
-            try {
-                $response = Http::timeout(4)
-                    ->connectTimeout(2)
-                    ->withOptions([
-                        'proxy' => $proxyString,
-                        'verify' => false,
-                    ])
-                    ->get($url);
+        // 2. Перебираем сайты по очереди. Если один недоступен, идем к следующему
+        foreach ($targets as $url) {
+            if (empty($url)) continue;
 
-                if ($response->successful()) {
-                    $body = $response->body();
+            $ch = curl_init();
 
-                    if (str_contains($body, $proxy->ip)) {
-                        $status = 'active';
-                        break;
-                    }
-                }
-            } catch (Exception $e) {
-                continue;
+            // Базовые настройки cURL
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+
+            // Игнорируем проблемы с SSL-сертификатами
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+
+            // Настройки прокси
+            curl_setopt($ch, CURLOPT_PROXY, $proxy->ip);
+            curl_setopt($ch, CURLOPT_PROXYPORT, $proxy->port);
+
+            // Тип протокола
+            if ($proxy->type === 'socks5') {
+                curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS5_HOSTNAME);
+            } elseif ($proxy->type === 'socks4') {
+                curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS4);
+            } else {
+                curl_setopt($ch, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
+            }
+
+            // Авторизация
+            if ($proxy->username && $proxy->password) {
+                curl_setopt($ch, CURLOPT_PROXYUSERPWD, "{$proxy->username}:{$proxy->password}");
+                curl_setopt($ch, CURLOPT_PROXYAUTH, CURLAUTH_BASIC);
+            }
+
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlErrno = curl_errno($ch);
+
+            curl_close($ch);
+
+            // Если cURL успешно пробил туннель до текущего URL
+            if ($curlErrno === 0 && ($httpCode === 200 || $httpCode === 204)) {
+                $status = 'active';
+                break; // Успех! Выходим из цикла, остальные сайты проверять не нужно
             }
         }
 
+        // 3. Записываем статус в базу данных
         $proxy->update([
             'status' => $status,
             'last_checked_at' => now(),

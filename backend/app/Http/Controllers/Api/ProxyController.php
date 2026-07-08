@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Jobs\CheckProxyJob;
 use App\Http\Controllers\Controller;
 use App\Models\Proxy;
 use App\Services\ProxyCheckerService;
+use App\Services\ProxyImportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -49,7 +51,6 @@ class ProxyController extends Controller
             'ip' => [
                 'required',
                 'ip',
-                // Проверяем уникальность пары IP + Порт
                 Rule::unique('proxies')->where(function ($query) use ($request) {
                     return $query->where('port', $request->port);
                 }),
@@ -59,12 +60,11 @@ class ProxyController extends Controller
             'username' => 'nullable|string|max:255',
             'password' => 'nullable|string|max:255',
         ], [
-            // Кастомное сообщение об ошибке для фронтенда
             'ip.unique' => 'This proxy server (IP and Port) has already been added to the list.',
         ]);
 
         $proxy = Proxy::create($validated);
-        $this->proxyChecker->check($proxy);
+        CheckProxyJob::dispatch($proxy);
 
         return response()->json($proxy, 201);
     }
@@ -95,7 +95,7 @@ class ProxyController extends Controller
         ]);
 
         $proxy->update($validated);
-        $this->proxyChecker->check($proxy);
+        CheckProxyJob::dispatch($proxy);
 
         return response()->json($proxy);
     }
@@ -112,9 +112,43 @@ class ProxyController extends Controller
         return response()->json(null, 204);
     }
 
+    /**
+     * check function
+     *
+     * @param Proxy $proxy
+     * @return JsonResponse
+     */
     public function check(Proxy $proxy): JsonResponse
     {
         $this->proxyChecker->check($proxy);
         return response()->json($proxy);
+    }
+
+    /**
+     * import function
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function import(Request $request, ProxyImportService $importService): JsonResponse
+    {
+        $request->validate([
+            'file' => 'required|file|max:2048',
+        ]);
+
+        $result = $importService->importFromTxt($request->file('file'));
+
+        if ($result['imported'] === 0 && !empty($result['errors'])) {
+            return response()->json([
+                'message' => 'Не удалось импортировать прокси. Проверьте формат файла.',
+                'errors' => ['file' => $result['errors']]
+            ], 422);
+        }
+
+        return response()->json([
+            'success'  => true,
+            'imported' => $result['imported'],
+            'skipped_errors' => $result['errors']
+        ]);
     }
 }

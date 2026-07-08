@@ -8,6 +8,8 @@ Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
 
+// File import proxy list
+Route::post('proxies/import', [ProxyController::class, 'import']);
 
 // CRUD 
 Route::apiResource('proxies', ProxyController::class);

@@ -54,6 +54,46 @@ const handleSubmit = async () => {
     isLoading.value = false
 }
 
+// Функция для массовой загрузки из файла
+const handleFileUpload = async (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+
+    const formData = new FormData()
+    formData.append('file', file)
+
+    isLoading.value = true
+    errorMessage.value = ''
+    validationErrors.value = {}
+
+    try {
+        const res = await fetch('/api/proxies/import', {
+            method: 'POST',
+            headers: { 'Accept': 'application/json' }, // Content-Type не ставим, браузер выставит multipart/form-data сам
+            body: formData
+        })
+
+        const result = await res.json()
+
+        if (res.status === 422) {
+            validationErrors.value = result.errors
+            isLoading.value = false
+            return
+        }
+
+        if (!res.ok) throw new Error('Import error')
+
+        alert(`Proxy imported successfully: ${result.imported}`)
+        await fetchProxies()
+    } catch (err) {
+        console.error(err)
+        errorMessage.value = 'Failed to load proxy from file. Check the format.'
+    } finally {
+        isLoading.value = false
+        event.target.value = '' // Сбрасываем инпут
+    }
+}
+
 const deleteProxy = async (id) => {
     if (!confirm('Are you sure you want to delete this proxy?')) return
     try {
@@ -164,7 +204,17 @@ onBeforeUnmount(() => clearInterval(interval))
                 </button>
             </div>
         </form>
-
+        <div class="import-section">
+            <h4>📁 Bulk import from file</h4>
+            <p class="import-hint">Supported string formats: <code>ip:port</code> or <code>ip:port:user:pass</code> (each proxy on a new line).</p>
+            <div class="file-input-wrapper">
+                <input type="file" accept=".txt" @change="handleFileUpload" :disabled="isLoading" id="proxy-file" />
+                <label for="proxy-file" class="btn-file-label">
+                    {{ isLoading ? 'Обработка...' : 'Выбрать .txt файл с прокси' }}
+                </label>
+            </div>
+        </div>
+        <br>
         <!-- TABLE PROXIES -->
         <div class="table-responsive">
             <table class="proxy-table">
@@ -455,4 +505,43 @@ button {
 
 .btn-check:hover { background: #dcfce7; }
 .btn-delete:hover { background: #fee2e2; }
+
+.import-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #cbd5e1;
+}
+.import-section h4 {
+    margin: 0 0 0.5rem 0;
+    color: #1e293b;
+    font-size: 0.95rem;
+}
+.import-hint {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin: 0 0 1rem 0;
+}
+.import-hint code {
+    background: #e2e8f0;
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+    font-family: monospace;
+}
+.file-input-wrapper input[type="file"] {
+    display: none;
+}
+.btn-file-label {
+    display: inline-block;
+    padding: 0.6rem 1.2rem;
+    background: #0284c7;
+    color: white;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.btn-file-label:hover {
+    background: #0369a1;
+}
 </style>

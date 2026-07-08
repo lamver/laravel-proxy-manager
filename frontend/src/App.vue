@@ -1,13 +1,18 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 
+const isFormVisible = ref(false)
 const proxies = ref([])
 const isLoading = ref(false)
 const errorMessage = ref('')
 const validationErrors = ref({})
-
 const form = ref({ id: null, ip: '', port: 8080, type: 'http', username: '', password: '' })
 const isEditing = ref(false)
+
+const openCreateForm = () => {
+    resetForm()
+    isFormVisible.value = true
+}
 
 const fetchProxies = async () => {
     try {
@@ -54,7 +59,6 @@ const handleSubmit = async () => {
     isLoading.value = false
 }
 
-// Функция для массовой загрузки из файла
 const handleFileUpload = async (event) => {
     const file = event.target.files[0]
     if (!file) return
@@ -69,7 +73,7 @@ const handleFileUpload = async (event) => {
     try {
         const res = await fetch('/api/proxies/import', {
             method: 'POST',
-            headers: { 'Accept': 'application/json' }, // Content-Type не ставим, браузер выставит multipart/form-data сам
+            headers: { 'Accept': 'application/json' },
             body: formData
         })
 
@@ -90,7 +94,7 @@ const handleFileUpload = async (event) => {
         errorMessage.value = 'Failed to load proxy from file. Check the format.'
     } finally {
         isLoading.value = false
-        event.target.value = '' // Сбрасываем инпут
+        event.target.value = ''
     }
 }
 
@@ -123,12 +127,14 @@ const editProxy = (proxy) => {
     form.value = { ...proxy }
     isEditing.value = true
     validationErrors.value = {}
+    isFormVisible.value = true
 }
 
 const resetForm = () => {
     form.value = { id: null, ip: '', port: 8080, type: 'http', username: '', password: '' }
     isEditing.value = false
     validationErrors.value = {}
+    isFormVisible.value = false
 }
 
 const formatTime = (dateString) => {
@@ -147,12 +153,32 @@ onBeforeUnmount(() => clearInterval(interval))
 <template>
     <main class="proxy-manager">
         <h1>Managing proxy servers</h1>
-
         <!-- Common errors -->
         <div v-if="errorMessage" class="error-banner">{{ errorMessage }}</div>
 
+        <div class="top-bar">
+            <div class="import-section">
+                <div class="import-meta">
+                    <h4>📁 Bulk import from file</h4>
+                    <p class="import-hint">Formats: <code>protocol:ip:port</code> or <code>protocol:user:pass:ip:port</code></p>
+                </div>
+                <div class="file-input-wrapper">
+                    <input type="file" accept=".txt" @change="handleFileUpload" :disabled="isLoading" id="proxy-file" />
+                    <label for="proxy-file" class="btn-file-label">
+                        {{ isLoading ? 'Processing...' : 'Выбрать .txt файл с прокси' }}
+                    </label>
+                </div>
+            </div>
+
+            <div class="action-section">
+                <button v-if="!isFormVisible" @click="openCreateForm" class="btn-primary btn-add">
+                    ➕ Add proxy
+                </button>
+            </div>
+        </div>
+
         <!-- ADD / EDIT -->
-        <form @submit.prevent="handleSubmit" class="proxy-form">
+        <form v-if="isFormVisible" @submit.prevent="handleSubmit" class="proxy-form">
             <h3>{{ isEditing ? '✏️ Edit proxy' : '➕ Add a new proxy' }}</h3>
             
             <!-- Validate errors list -->
@@ -199,22 +225,12 @@ onBeforeUnmount(() => clearInterval(interval))
                 <button type="submit" class="btn-submit" :disabled="isLoading">
                     {{ isEditing ? 'Update' : 'Save and check' }}
                 </button>
-                <button v-if="isEditing" type="button" @click="resetForm" class="btn-cancel">
-                    Отмена
+                <button type="button" @click="resetForm" class="btn-cancel">
+                    Cancel
                 </button>
             </div>
         </form>
-        <div class="import-section">
-            <h4>📁 Bulk import from file</h4>
-            <p class="import-hint">Supported string formats: <code>ip:port</code> or <code>ip:port:user:pass</code> (each proxy on a new line).</p>
-            <div class="file-input-wrapper">
-                <input type="file" accept=".txt" @change="handleFileUpload" :disabled="isLoading" id="proxy-file" />
-                <label for="proxy-file" class="btn-file-label">
-                    {{ isLoading ? 'Обработка...' : 'Выбрать .txt файл с прокси' }}
-                </label>
-            </div>
-        </div>
-        <br>
+        
         <!-- TABLE PROXIES -->
         <div class="table-responsive">
             <table class="proxy-table">
@@ -260,6 +276,107 @@ onBeforeUnmount(() => clearInterval(interval))
 </template>
 
 <style scoped>
+
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 1.2rem 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    gap: 2rem;
+}
+
+/* Блок импорта внутри панели */
+.import-section {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex: 1;
+    margin-top: 0;
+    padding-top: 0;
+    border: none;
+}
+
+.import-meta {
+    display: flex;
+    flex-direction: column;
+}
+
+.import-section h4 {
+    margin: 0 0 0.2rem 0;
+    color: #1e293b;
+    font-size: 0.95rem;
+}
+
+.import-hint {
+    font-size: 0.8rem;
+    color: #64748b;
+    margin: 0;
+}
+
+.import-hint code {
+    background: #e2e8f0;
+    padding: 0.1rem 0.3rem;
+    border-radius: 4px;
+    font-family: monospace;
+}
+
+/* Кнопка загрузки файла */
+.file-input-wrapper input[type="file"] {
+    display: none;
+}
+
+.btn-file-label {
+    display: inline-block;
+    padding: 0.55rem 1.2rem;
+    background: #0284c7;
+    color: white;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+}
+
+.btn-file-label:hover {
+    background: #0369a1;
+}
+
+/* Правая часть панели с кнопкой Add proxy */
+.action-section {
+    display: flex;
+    align-items: center;
+}
+
+.btn-primary {
+    background: #2563eb;
+    color: white;
+    padding: 0.6rem 1.3rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    white-space: nowrap;
+}
+
+.btn-primary:hover {
+    background: #1d4ed8;
+}
+
+/* Стили для формы (теперь она отделена от верхней панели отступом) */
+.proxy-form {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
 /* Контейнер */
 .proxy-manager { 
     max-width: 1000px; 
@@ -506,11 +623,6 @@ button {
 .btn-check:hover { background: #dcfce7; }
 .btn-delete:hover { background: #fee2e2; }
 
-.import-section {
-    margin-top: 1.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid #cbd5e1;
-}
 .import-section h4 {
     margin: 0 0 0.5rem 0;
     color: #1e293b;

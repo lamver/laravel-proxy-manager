@@ -51,6 +51,7 @@ class ProxyCheckerService
                 curl_setopt($ch, CURLOPT_PROXYAUTH, CURLAUTH_BASIC);
             }
 
+            curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $curlErrno = curl_errno($ch);
 

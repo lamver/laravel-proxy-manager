@@ -507,7 +507,7 @@ onBeforeUnmount(() => clearInterval(interval))
     background: #1d4ed8;
 }
 
-/* Стили для формы (теперь она отделена от верхней панели отступом) */
+/* Стили для формы */
 .proxy-form {
     background: #ffffff;
     border: 1px solid #cbd5e1;

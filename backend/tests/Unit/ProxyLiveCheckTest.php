@@ -89,10 +89,13 @@ class ProxyLiveCheckTest extends TestCase
 
             $this->assertTrue(true);
         } else {
-            echo "[ОШИБКА] Код ошибки cURL: " . $curlErrno . "\n";
-            echo "[ОШИБКА] Текст ошибки: " . $curlError . "\n";
-            echo "==================================================\n\n";
-            $this->assertTrue(false);
+            // fail() принудительно прокинет текст ошибки сквозь буфер Laravel
+            $this->fail(
+                "ошибка либы libcurl внутри Docker!\n" .
+                    "[Код cURL]: " . $curlErrno . "\n" .
+                    "[Текст ошибки]: " . $curlError . "\n" .
+                    "[HTTP код ответа]: " . $httpCode
+            );
         }
     }
 }

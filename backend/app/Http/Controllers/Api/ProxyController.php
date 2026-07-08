@@ -65,7 +65,7 @@ class ProxyController extends Controller
      * store function
      *
      * @param Request $request
-     * @return void
+     * @return JsonResponse
      */
     public function store(Request $request): JsonResponse
     {

@@ -11,8 +11,8 @@ Route::get('/user', function (Request $request) {
 // File import proxy list
 Route::post('proxies/import', [ProxyController::class, 'import']);
 
-// CRUD 
-Route::apiResource('proxies', ProxyController::class);
-
 // Checker
 Route::post('proxies/{proxy}/check', [ProxyController::class, 'check']);
+
+// CRUD 
+Route::apiResource('proxies', ProxyController::class);

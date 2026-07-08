@@ -10,7 +10,7 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-// CRON
+// CRON job proxy checker
 Schedule::call(function () {
     Proxy::all()->each(function ($proxy) {
         CheckProxyJob::dispatch($proxy);

@@ -12,12 +12,12 @@ const isEditing = ref(false)
 const fetchProxies = async () => {
     try {
         const res = await fetch('/api/proxies')
-        if (!res.ok) throw new Error('Ошибка сервера при получении списка')
+        if (!res.ok) throw new Error('Server error while retrieving list')
         proxies.value = await res.json()
         errorMessage.value = ''
     } catch (err) { 
-        console.error('Ошибка загрузки:', err) 
-        errorMessage.value = 'Не удалось загрузить список прокси.'
+        console.error('Loading error:', err) 
+        errorMessage.value = 'Failed to load proxy list.'
     }
 }
 
@@ -43,19 +43,19 @@ const handleSubmit = async () => {
             return
         }
 
-        if (!res.ok) throw new Error('Ошибка при сохранении')
+        if (!res.ok) throw new Error('Error saving')
         
         resetForm()
         await fetchProxies()
     } catch (err) { 
         console.error(err) 
-        alert('Произошла ошибка при сохранении прокси.')
+        alert('An error occurred while saving the proxy.')
     }
     isLoading.value = false
 }
 
 const deleteProxy = async (id) => {
-    if (!confirm('Вы уверены, что хотите удалить этот прокси?')) return
+    if (!confirm('Are you sure you want to delete this proxy?')) return
     try {
         const res = await fetch(`/api/proxies/${id}`, { method: 'DELETE' })
         if (res.ok) {

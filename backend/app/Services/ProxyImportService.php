@@ -22,8 +22,15 @@ class ProxyImportService
         $errors = [];
 
         foreach ($lines as $index => $line) {
-            $line = trim(preg_replace('/\s+/', ' ', $line));
+
+            $line = trim($line);
             if (empty($line)) continue;
+
+            if (str_contains($line, '://')) {
+                $line = str_replace('://', ':', $line);
+            }
+
+            $line = preg_replace('/\s+/', ' ', $line);
 
             $parts = array_map('trim', explode(':', $line));
             $count = count($parts);
